@@ -17,7 +17,6 @@ real_0225_1 copy
 0302　標準偏差を求めるプログラムを追加(deviation_0207_1.py)
 """
 import openpyxl
-#import datetime  # タイムスタンプ生成に使用
 import time
 import os
 import csv
