@@ -1,20 +1,5 @@
 """
-0414 全体的に修正
-real_0326_3からコピー
-real_0326_2 copy.py
-ゾーン変化するまでに時間がかかるものを残す
-real_0326_1 copy
-削除してからシフト
-
-1018からコピー
-- ゾーン変化箇所のインデックスを取得
-test_1124_real.py からコピー
-空白のところに1000を入れるように変更
-test_0118からコピー
-シート0に時刻を入れることができるようにした
-real_0225_1 copy
-シートの削除を追加
-0302　標準偏差を求めるプログラムを追加(deviation_0207_1.py)
+データの位置を修正、標準偏差を求めるプログラム
 """
 import openpyxl
 import time
@@ -109,8 +94,8 @@ def process_all_sheets(file_path, write_path):
     print(f"ゾーン変化箇所のランキング: {sorted_change_indices}")
 
     if len(sorted_change_indices) >= 100:
-        target_change_index = sorted_change_indices[0][1]#
-        target_sheet_name = sorted_change_indices[0][0]
+        target_change_index = sorted_change_indices[99][1]#
+        target_sheet_name = sorted_change_indices[99][0]
         print(f"100番目のゾーン変化箇所の行番号: {target_change_index}")
     else:
         target_change_index = sorted_change_indices[-1][1]  # 100個未満の場合は最大のものを使用
@@ -131,7 +116,9 @@ def process_all_sheets(file_path, write_path):
             save_data(sheet, column_data, shift_diff, target_change_index, sampling_interval, measurement_count)#関数の呼び出し
 
     # 上書き保存（タイムスタンプ付きファイル名）
-    new_file_path = file_path.replace(".xlsx", f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+    new_name = datetime.now().strftime("%Y%m%d_%H%M%S")  # 新しい時間
+    new_file_path = os.path.join(os.path.dirname(file_path), f"a_{new_name}")  # "devi_" を追加 標準偏差を求める
+    #new_file_path = file_path.replace(".xlsx", f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
     print("saving...")
     wb.save(new_file_path)
     print(f'Saved to {new_file_path}')
@@ -197,7 +184,7 @@ def calculate_std_dev(read_path, write_path,column_letter='F'):
     total_used_data_count = 0  # 使用されたデータ数を記録する変数
     # 任意のシートからG2-G5およびH2-H5のデータをシート '0' にコピー
 
-    """ 以下の3行は一旦コメントアウト"""
+    """ 以下の3行は一旦コメントアウト 測定条件を書き込み用のシートに書き込む"""
     # for i in range(2, 6):
     #     sheet0[f'G{i}'] = sheets_to_process[0][f'G{i}'].value  # 最初のシートからコピー
     #     sheet0[f'H{i}'] = sheets_to_process[0][f'H{i}'].value
@@ -216,8 +203,7 @@ def calculate_std_dev(read_path, write_path,column_letter='F'):
             if shift_value != 1 and cell_value is not None:  # shift_valueが1でない場合はデータを収集
                 data.append(cell_value)
                 #unused_sheets[sheet.title] = False  # データが使用されたシートを「未使用ではない」と記録
-
-        
+  
         # データがない場合、終了
         if not data:
             sheet0['A2'] = len(sheets_to_process)  # 処理したシート数を記録
@@ -244,12 +230,6 @@ def calculate_std_dev(read_path, write_path,column_letter='F'):
         
         # 次の行へ
         row += 1
-    
-    # 未使用のシートと使用されたデータ数をテキストファイルに出力
-    #unused_sheet_names = [sheet_name for sheet_name, is_unused in unused_sheets.items() if is_unused]
-    #base_dir = os.path.dirname(file_path)
-    #updated_time = datetime.now().strftime("%Y%m%d_%H%M%S")  # 新しい時間
-    #unused_file_path = os.path.join(base_dir, f"sheet_usage_report_{updated_time}.txt")
     
     base_name = os.path.basename(read_path)  # ファイル名のみを抽出 データを読み込むのに使ったファイル名を使う
     updated_time = datetime.now().strftime("%Y%m%d_%H%M%S")  # 新しい時間
@@ -280,8 +260,8 @@ print(f'Process all sheets is done. Elapsed time: {end_time - start_time:.2f} se
 Tk().withdraw()
 print("計算に使うファイルを選んでください")
 read_path = filedialog.askopenfilename(title="Select Excel file", filetypes=[("Excel files", "*.xlsx")])
-print("記録を残すファイルを選んでください")
-write_path = filedialog.askopenfilename(title="Select Excel file", filetypes=[("Excel files", "*.xlsx")])
+#print("記録を残すファイルを選んでください")
+#write_path = filedialog.askopenfilename(title="Select Excel file", filetypes=[("Excel files", "*.xlsx")])
 calculate_std_dev(read_path, write_path,column_letter='F')#標準偏差を求める関数
 print(read_path)
 print(write_path)
