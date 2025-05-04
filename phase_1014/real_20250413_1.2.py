@@ -116,9 +116,15 @@ def process_all_sheets(file_path, write_path):
             save_data(sheet, column_data, shift_diff, target_change_index, sampling_interval, measurement_count)#関数の呼び出し
 
     # 上書き保存（タイムスタンプ付きファイル名）
-    new_name = datetime.now().strftime("%Y%m%d_%H%M%S")  # 新しい時間
-    new_file_path = os.path.join(os.path.dirname(file_path), f"a_{new_name}")  # "devi_" を追加 標準偏差を求める
+
+    """位置を動かしたファイル(file_path)を保存"""
+    base_name = os.path.basename(file_path)  # ファイル名のみを抽出 データを読み込むのに使ったファイル名を使う
+    updated_time = datetime.now().strftime("%Y%m%d_%H%M%S")  # 新しい時間
+    new_name = re.sub(r'(\d{8}_\d{6})', updated_time, base_name)  # 古い時間部分を新しい時間に置き換え
+    new_file_path = os.path.join(os.path.dirname(file_path), f"a0_{new_name}")  # "devi_" を追加 標準偏差を求める
     #new_file_path = file_path.replace(".xlsx", f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+
+
     print("saving...")
     wb.save(new_file_path)
     print(f'Saved to {new_file_path}')
@@ -144,8 +150,14 @@ def process_all_sheets(file_path, write_path):
                 sheet_0[f"E{i}"] = -(target_change_index - i) * sampling_interval
             else:
                 sheet_0[f"E{i}"] = (i - target_change_index) * sampling_interval
-        wb.save(write_path)
-        print(f"データが '{write_path}' に保存されました。")
+        
+        """write_pathの名前を変更"""
+        base_name = os.path.basename(write_path)  # ファイル名のみを抽出 データを読み込むのに使ったファイル名を使う
+        updated_time = datetime.now().strftime("%Y%m%d_%H%M%S")  # 新しい時間
+        new_name = re.sub(r'(\d{8}_\d{6})', updated_time, base_name)  # 古い時間部分を新しい時間に置き換え
+        new_write_path = os.path.join(os.path.dirname(write_path), f"a1_{new_name}")  # "devi_" を追加 標準偏差を求める
+        wb.save(new_write_path)
+        print(f"データが '{new_write_path}' に保存されました。")
 
     # ランキングをCSVファイルに出力
     ranking_file_path = os.path.join(os.path.dirname(file_path), f"ranking_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
@@ -156,6 +168,8 @@ def process_all_sheets(file_path, write_path):
             writer.writerow([rank, sheet_name, change_index])
     print(f'ランキングを {ranking_file_path} に保存しました。')
 
+    return new_write_path
+    #return new_file_path, new_write_path, ranking_file_path#将来的には必要になるかもしれないので、戻り値を追加する
 
 """ 標準偏差を求めるプログラム"""
 
@@ -166,12 +180,12 @@ def calculate_std_dev(read_path, write_path,column_letter='F'):
     workbook = openpyxl.load_workbook(read_path)
     writebook=openpyxl.load_workbook(write_path)
     
-    #シート0があるか否かは関係ないから、以下はいらない
     # # シート '0' が存在しなければ新規作成
-    if '0' in writebook.sheetnames:
-         sheet0 = writebook['0']
-    # else:
-    #     sheet0 = workbook.create_sheet('0')
+    if '0' not in writebook.sheetnames:
+        print("シート '0' が存在しません。")
+        return
+              
+    sheet0 = writebook['0']
     
     # '0'以外のすべてのシートを処理対象として取得
     sheets_to_process = [workbook[sheet_name] for sheet_name in workbook.sheetnames if sheet_name != '0']
@@ -212,7 +226,7 @@ def calculate_std_dev(read_path, write_path,column_letter='F'):
         # 標準偏差と平均を計算
         std_dev = statistics.stdev(data) if len(data) > 1 else 0
         mean_value = statistics.mean(data) if data else 0
-        print(f"Row {row}: 標準偏差 = {std_dev}, 平均 = {mean_value}")
+        #print(f"Row {row}: 標準偏差 = {std_dev}, 平均 = {mean_value}")# デバッグ用
         
         # シート '0' の指定セルに標準偏差を書き込む
         sheet0[f'{column_letter}{row}'] = std_dev
@@ -231,37 +245,37 @@ def calculate_std_dev(read_path, write_path,column_letter='F'):
         # 次の行へ
         row += 1
     
-    base_name = os.path.basename(read_path)  # ファイル名のみを抽出 データを読み込むのに使ったファイル名を使う
+    base_name = os.path.basename(write_path)  # ファイル名のみを抽出 データを読み込むのに使ったファイル名を使う
     updated_time = datetime.now().strftime("%Y%m%d_%H%M%S")  # 新しい時間
     new_name = re.sub(r'(\d{8}_\d{6})', updated_time, base_name)  # 古い時間部分を新しい時間に置き換え
-    new_file_path = os.path.join(os.path.dirname(file_path), f"stdev_{new_name}")  # "devi_" を追加
+    new_write_path = os.path.join(os.path.dirname(write_path), f"stdev_{new_name}")  # "devi_" を追加
     
-    workbook.save(new_file_path)
-    writebook.save(write_path)  # write_pathに保存
+    writebook.save(new_write_path)  # write_pathに保存
     end_time = time.time()
     print(f"処理時間: {end_time - start_time:.2f}秒")
-    print(f"データが '{new_file_path}' に保存されました。標準偏差はシート '0' の {column_letter} 列の2行目から書き込みました。")
+    print(f"データが '{new_write_path}' に保存されました。標準偏差はシート '0' の {column_letter} 列の2行目から書き込みました。")
 
 
 """メイン関数に相当する部分"""
 # Step1 位置合わせ
 Tk().withdraw()
 print("位置合わせに使うファイルを選んでください")
-file_path = filedialog.askopenfilename(title="Select Excel file", filetypes=[("Excel files", "*.xlsx")])
+file_path = filedialog.askopenfilename(title="測定結果をまとめたエクセルファイルを選択", filetypes=[("Excel files", "*.xlsx")])
 print("記録を残すファイルを選んでください")
-write_path = filedialog.askopenfilename(title="Select Excel file", filetypes=[("Excel files", "*.xlsx")])
+write_path = filedialog.askopenfilename(title="標準偏差を書き込むエクセルファイルを選択", filetypes=[("Excel files", "*.xlsx")])
 
 start_time = time.time()#開始時間
-process_all_sheets(file_path,write_path)#関数の呼び出し
+new_write_path=process_all_sheets(file_path,write_path)#関数の呼び出し
 end_time = time.time()#終了時間
 print(f'Process all sheets is done. Elapsed time: {end_time - start_time:.2f} seconds.')
 
 # Step2 標準偏差を求める
 Tk().withdraw()
-print("計算に使うファイルを選んでください")
-read_path = filedialog.askopenfilename(title="Select Excel file", filetypes=[("Excel files", "*.xlsx")])
+print("計算に使うファイルを選んでください")#読み込むときにファイル名を変えたものを読み込ませておく必要がある、、書き換えたものをどういう風にして置き換えればいいのか
+read_path = filedialog.askopenfilename(title="位置を修正したエクセルファイルを選択", filetypes=[("Excel files", "*.xlsx")])#最終的にはここも無くしたい
+
 #print("記録を残すファイルを選んでください")
 #write_path = filedialog.askopenfilename(title="Select Excel file", filetypes=[("Excel files", "*.xlsx")])
-calculate_std_dev(read_path, write_path,column_letter='F')#標準偏差を求める関数
+calculate_std_dev(read_path, new_write_path,column_letter='F')#標準偏差を求める関数
 print(read_path)
 print(write_path)
