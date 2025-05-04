@@ -227,6 +227,17 @@ def calculate_std_dev(new_file_path, write_path,column_letter='F'):
         while True:
             # 処理対象シートの指定列からデータを収集
             data = []
+
+            # for sheet in sheets_to_process:
+            #     # シート全体のデータを一括取得
+            #     column_data = sheet.range(f'{column_letter}2:{column_letter}{sheet.cells.last_cell.row}').value
+            #     shift_data = sheet.range(f'K2:K{sheet.cells.last_cell.row}').value
+
+            #     # 必要なデータをフィルタリング
+            #     for shift_value, cell_value in zip(shift_data, column_data):
+            #         if shift_value != 1 and cell_value is not None:
+            #             data.append(cell_value)
+    
             for sheet in sheets_to_process:
                 shift_value=sheet.range(f'K{row}').value
                 cell_value = sheet.range(f'{column_letter}{row}').value
