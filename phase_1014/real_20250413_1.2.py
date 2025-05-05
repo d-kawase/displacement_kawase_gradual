@@ -72,11 +72,18 @@ def process_all_sheets(file_path, write_path):
     all_change_indices = {}  # 全てのゾーン変化箇所行番号を保持（シート名と共に）
     sheet_data = {}  # 各シートのデータとゾーン変化箇所を保持
     std_dev_data = []  # 標準偏差用のデータを保持
-
+    
+    """write_pathに転記するデータを保存"""
     # 最初に読み込んだシートから測定数とサンプリング間隔を取得
     first_sheet = wb[sheet_names[0]]
     measurement_count = int(first_sheet["H2"].value)
     sampling_interval = float(first_sheet["H3"].value)
+    tc=int(first_sheet["H4"].value)  # タイムコンスタントの値を取得
+    sens=int(first_sheet["H5"].value)  # SENSの値を取得
+    sweep_start = float(first_sheet["H8"].value)  # 掃引開始の値を取得
+    sweep_stop = float(first_sheet["H9"].value)  # 掃引終了の値を取得
+    velocity = float(first_sheet["H12"].value)  # 速度の値を取得
+
 
     sheet_names = [name for name in wb.sheetnames if name != "0"]
     num = len(sheet_names)   
@@ -135,8 +142,9 @@ def process_all_sheets(file_path, write_path):
         })
         print(f"{sheet_name} のdistance_data: {distance_data[1:]} を収集しました。")#デバック用
 
-    # 上書き保存（タイムスタンプ付きファイル名）
 
+
+    # 上書き保存（タイムスタンプ付きファイル名）
     """位置を動かしたファイル(file_path)を保存"""
     base_name = os.path.basename(file_path)  # ファイル名のみを抽出 データを読み込むのに使ったファイル名を使う
     updated_time = datetime.now().strftime("%Y%m%d_%H%M%S")  # 新しい時間
@@ -158,8 +166,17 @@ def process_all_sheets(file_path, write_path):
     try:
         app = xw.App(visible=False)  # Excelアプリケーションを非表示で起動
         wb = app.books.open(write_path)
+        
+        """計測条件を記録"""
+        sheet_0.range("H2").value =measurement_count
+        sheet_0.range("H3").value =sampling_interval
+        sheet_0.range("H4").value =tc
+        sheet_0.range("H5").value =sens
+        sheet_0.range("H8").value = sweep_start
+        sheet_0.range("H9").value = sweep_stop
+        sheet_0.range("H12").value = velocity
 
-
+#ここから下のsheet_0の書き込みはいる？
         sheet_0 = wb.sheets("0")
         sheet_0.range("G8").value = "ゾーンが変化した時間[ms]"
         sheet_0.range("G9").value = "100個のデータがそろう行番号"
