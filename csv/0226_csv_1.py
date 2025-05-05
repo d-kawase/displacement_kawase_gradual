@@ -14,6 +14,8 @@ from datetime import datetime
 import math 
 from scipy.constants import *
 
+
+
 def import_csv_files_to_existing_sheets():
     # Tkinterの隠れたウィンドウを作成して、ファイルダイアログだけを表示
     root = tk.Tk()
@@ -124,6 +126,7 @@ def import_csv_files_to_existing_sheets():
 
         # 次のシートへ
         sheet_index += 1
+    
     process_time = time.time() - start_time
     print(f"処理時間: {process_time:.2f}秒 file is not saved yet")
     # ワークブックを保存
@@ -134,5 +137,7 @@ def import_csv_files_to_existing_sheets():
     save_time = time.time() - start_time
     print(f"保存時間: {save_time:.2f}秒")
 
-# 実行例
+
+
+# メイン処理
 import_csv_files_to_existing_sheets()

@@ -44,18 +44,26 @@ def save_data(sheet, column_data, shift_diff, target_change_index, sampling_inte
     """ゾーン変化箇所の差分に応じてデータをシフトし、Excelに書き込む"""
     max_row = len(column_data["A"]) + 2 +shift_diff
 
+    # 新しい column_data を作成
+    updated_column_data = {col: [None] * max_row for col in column_data.keys()}
+    #updated_column_data = {col: [None] * shift_diff for col in column_data.keys()}
+
     # データシフト（元のデータは消去せずに移動）
     for row in range(max_row - 1, 1, -1):  # 逆順でシフト
         for col, data in column_data.items():
             new_row = row + shift_diff
             if 2 <= new_row < max_row:  # 範囲内に収まる場合
                 sheet[f"{col}{new_row}"] = sheet[f"{col}{row}"].value
+                updated_column_data[col][new_row - 2] = data[row - 2]  # 更新されたデータを格納
             if shift_diff > 0:  # シフト後の余白部分を空白にする
                 if sheet[f"{col}{row}"].value is not None:  # 元のセルに値がある場合のみ処理
                     sheet[f"{col}{row}"] = None  # セルを空白にする
                     #if col == "A":  # 1回だけK列に1を入れる
                     if row <= shift_diff+1:
                         sheet[f"K{row}"] = 1
+    # column_data を更新
+    for col in column_data.keys():
+        column_data[col] = updated_column_data[col]
 
 def process_all_sheets(file_path, write_path):
     """1/2 全てのシートを処理する関数"""
@@ -125,6 +133,7 @@ def process_all_sheets(file_path, write_path):
             "distance_data": distance_data[1:],  # 2行目以降を格納
             # "k_data": k_data[1:]  # 2行目以降を格納
         })
+        print(f"{sheet_name} のdistance_data: {distance_data[1:]} を収集しました。")#デバック用
 
     # 上書き保存（タイムスタンプ付きファイル名）
 
@@ -210,69 +219,66 @@ def calculate_std_dev(std_dev_data, write_path,column_letter='F'):
         sheet0 = writebook.sheets['0']
         
 
-        row = 2
-        flag = 0
+        row = 2  # 処理を開始する行
         total_used_data_count = 0
 
         while True:
             # 処理対象シートの指定列からデータを収集
             data_f = []  # F列のデータ
-            data_k = []  # K列のデータ
+            flag = 0  # None のカウント
 
             for data in std_dev_data:
                 sheet_name = data["sheet_name"]
                 distance_data = data["distance_data"]
-                #k_data = data["k_data"]
 
                 # F列のデータを収集
+                #print(f"{"sheet_name"}:{len(distance_data)}")#デバック用
                 if row - 2 < len(distance_data):  # インデックスが範囲内の場合
                     cell_value_f = distance_data[row - 2]
                     if cell_value_f is not None:
                         data_f.append(cell_value_f)
+                    else:
+                        flag += 1  # None の場合フラグを増加
+                #print(f"Row {row}: {sheet_name} の F列のデータ = {cell_value_f} {flag}")
 
-                # # K列のデータを収集
-                # if row - 2 < len(k_data):  # インデックスが範囲内の場合
-                #     cell_value_k = k_data[row - 2]
-                #     if cell_value_k is not None:
-                #         data_k.append(cell_value_k)
+            if row==2:#初期のlen(std_dev_data)を取得
+                len_std_dev_data=len(data["sheet_name"])
+                print(f"len_std_dev_data:{len_std_dev_data}")#デバック用
+
+            # None の割合が 10% を超えた場合、次の行へ進む
+            if flag > len_std_dev_data * 0.1:
+                print(f"Row {row}: None の割合が 10% を超えたため、データ収集をスキップします。")
+                row += 1
+                continue
 
             # データがない場合、終了
             if not data_f:
                 break
 
+            # 標準偏差を求めるためのデータ数が 80% 未満の場合、次の行へ進む
+            if len(data_f) <= len_std_dev_data*0.8:
+                print(f"Row {row}: データが不足しているため、データ収集をスキップします。")
+                row += 1
+                continue
+
+
+
             # 標準偏差と平均を計算（None を除外して計算）
             filtered_data_f = [value for value in data_f if value is not None]
-            # filtered_data_k = [value for value in data_k if value is not None]
-
             std_dev_f = statistics.stdev(filtered_data_f) if len(filtered_data_f) > 1 else 0
             mean_value_f = statistics.mean(filtered_data_f) if filtered_data_f else 0
 
-            # std_dev_k = statistics.stdev(filtered_data_k) if len(filtered_data_k) > 1 else 0
-            # mean_value_k = statistics.mean(filtered_data_k) if filtered_data_k else 0
-
             print(f"Row {row}: F列 標準偏差 = {std_dev_f}, 平均 = {mean_value_f}")
-            # print(f"Row {row}: K列 標準偏差 = {std_dev_k}, 平均 = {mean_value_k}")
 
             # シート '0' の指定セルに標準偏差を書き込む
             sheet0.range(f'{column_letter}{row}').value = std_dev_f  # F列の標準偏差
-            # sheet0.range(f'K{row}').value = std_dev_k  # K列の標準偏差
-
-            # 平均をJ列とL列に記録
             sheet0.range(f'J{row}').value = mean_value_f  # F列の平均
-            # sheet0.range(f'L{row}').value = mean_value_k  # K列の平均
 
-            # 使用したデータ数をI列とM列に記録
+            # 使用したデータ数をI列に記録
             data_count_f = len(filtered_data_f)
-            # data_count_k = len(filtered_data_k)
-
-            if data_count_f == 100 and flag == 0:
-                sheet0.range('H10').value = row - 1  # 100個のデータがそろう時間[ms]を記録
-                flag = 1
-
             sheet0.range(f'I{row}').value = data_count_f  # F列のデータ数
-            # sheet0.range(f'M{row}').value = data_count_k  # K列のデータ数
 
-            # total_used_data_count += data_count_f + data_count_k
+            total_used_data_count += data_count_f
 
             # 次の行へ
             row += 1
@@ -389,6 +395,7 @@ print("記録を残すファイルを選んでください")
 write_path = filedialog.askopenfilename(title="標準偏差を書き込むエクセルファイルを選択", filetypes=[("Excel files", "*.xlsx")])
 
 start_time = time.time()#開始時間
+print(f"{file_path}と{write_path}を読み込みました。")
 std_dev_data,new_file_path, new_write_path=process_all_sheets(file_path,write_path)#関数の呼び出し
 end_time = time.time()#終了時間
 print(f'Process all sheets is done. Elapsed time: {end_time - start_time:.2f} seconds.')
