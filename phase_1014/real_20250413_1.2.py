@@ -13,6 +13,7 @@ from datetime import datetime
 import xlwings as xw
 
 
+
 def collect_zone_change_indices(sheet):
     """ゾーン変化箇所の行番号を取得する関数"""
     column_data = {col: [] for col in ["A", "B", "C", "D", "E", "F", "I", "J"]}
@@ -62,6 +63,7 @@ def process_all_sheets(file_path, write_path):
     sheet_names = [name for name in wb.sheetnames if name != "0"]
     all_change_indices = {}  # 全てのゾーン変化箇所行番号を保持（シート名と共に）
     sheet_data = {}  # 各シートのデータとゾーン変化箇所を保持
+    std_dev_data = []  # 標準偏差用のデータを保持
 
     # 最初に読み込んだシートから測定数とサンプリング間隔を取得
     first_sheet = wb[sheet_names[0]]
@@ -115,6 +117,14 @@ def process_all_sheets(file_path, write_path):
         if shift_diff > 0:
             print(f"{sheet_name} のデータを {shift_diff} 行下にシフトします。")
             save_data(sheet, column_data, shift_diff, target_change_index, sampling_interval, measurement_count)#関数の呼び出し
+       # 標準偏差用のデータを収集
+        distance_data = column_data["F"]  # 距離情報が入っている列（F列）
+        # k_data = column_data["K"]  # K列のデータ
+        std_dev_data.append({
+            "sheet_name": sheet_name,
+            "distance_data": distance_data[1:],  # 2行目以降を格納
+            # "k_data": k_data[1:]  # 2行目以降を格納
+        })
 
     # 上書き保存（タイムスタンプ付きファイル名）
 
@@ -134,6 +144,7 @@ def process_all_sheets(file_path, write_path):
 
 
     """ 2/2 write_path(記録を残すようのファイル)への記録とCSVファイルへの出力"""
+    print("記録を残すファイルに書き込みます")
         # シート名が "0" のシートに target_change_index と target_sheet_name を保存
     try:
         app = xw.App(visible=False)  # Excelアプリケーションを非表示で起動
@@ -159,12 +170,10 @@ def process_all_sheets(file_path, write_path):
         timestamp = datetime.now().strftime("_%Y%m%d_%H%M%S")  # 新しい時間
         new_write_path = f"{write_path.rsplit('.', 1)[0]}_{timestamp}.xlsx"
         
-        
         # base_name = os.path.basename(write_path)  # ファイル名のみを抽出 データを読み込むのに使ったファイル名を使う
         # updated_time = datetime.now().strftime("%Y%m%d_%H%M%S")  # 新しい時間
         # new_name = re.sub(r'(\d{8}_\d{6})', updated_time, base_name)  # 古い時間部分を新しい時間に置き換え
         # new_write_path = os.path.join(os.path.dirname(write_path), f"a1_{new_name}") 
-        
         
         wb.save(new_write_path)
         wb.close()  # 書き込み用のワークブックを閉じる
@@ -184,30 +193,96 @@ def process_all_sheets(file_path, write_path):
     print(new_file_path)
     print(write_path)
 
-    return  new_file_path, new_write_path
+    return  std_dev_data, new_file_path, new_write_path
     #return new_file_path, new_write_path, ranking_file_path#将来的には必要になるかもしれないので、戻り値を追加する
 
 """ 標準偏差を求めるプログラム"""
 
-def calculate_std_dev(new_file_path, write_path,column_letter='F'):
+def calculate_std_dev(std_dev_data, write_path,column_letter='F'):
     start_time = time.time()
     print(new_file_path)
     print(write_path)
         # Excelファイルを読み込む
     try:
         app = xw.App(visible=False)  # Excelアプリケーションを非表示で起動
-        workbook = app.books.open(new_file_path)
+        #workbook = app.books.open(new_file_path)
         writebook=app.books.open(write_path)
-                
         sheet0 = writebook.sheets['0']
         
+
+        row = 2
+        flag = 0
+        total_used_data_count = 0
+
+        while True:
+            # 処理対象シートの指定列からデータを収集
+            data_f = []  # F列のデータ
+            data_k = []  # K列のデータ
+
+            for data in std_dev_data:
+                sheet_name = data["sheet_name"]
+                distance_data = data["distance_data"]
+                #k_data = data["k_data"]
+
+                # F列のデータを収集
+                if row - 2 < len(distance_data):  # インデックスが範囲内の場合
+                    cell_value_f = distance_data[row - 2]
+                    if cell_value_f is not None:
+                        data_f.append(cell_value_f)
+
+                # # K列のデータを収集
+                # if row - 2 < len(k_data):  # インデックスが範囲内の場合
+                #     cell_value_k = k_data[row - 2]
+                #     if cell_value_k is not None:
+                #         data_k.append(cell_value_k)
+
+            # データがない場合、終了
+            if not data_f:
+                break
+
+            # 標準偏差と平均を計算（None を除外して計算）
+            filtered_data_f = [value for value in data_f if value is not None]
+            # filtered_data_k = [value for value in data_k if value is not None]
+
+            std_dev_f = statistics.stdev(filtered_data_f) if len(filtered_data_f) > 1 else 0
+            mean_value_f = statistics.mean(filtered_data_f) if filtered_data_f else 0
+
+            # std_dev_k = statistics.stdev(filtered_data_k) if len(filtered_data_k) > 1 else 0
+            # mean_value_k = statistics.mean(filtered_data_k) if filtered_data_k else 0
+
+            print(f"Row {row}: F列 標準偏差 = {std_dev_f}, 平均 = {mean_value_f}")
+            # print(f"Row {row}: K列 標準偏差 = {std_dev_k}, 平均 = {mean_value_k}")
+
+            # シート '0' の指定セルに標準偏差を書き込む
+            sheet0.range(f'{column_letter}{row}').value = std_dev_f  # F列の標準偏差
+            # sheet0.range(f'K{row}').value = std_dev_k  # K列の標準偏差
+
+            # 平均をJ列とL列に記録
+            sheet0.range(f'J{row}').value = mean_value_f  # F列の平均
+            # sheet0.range(f'L{row}').value = mean_value_k  # K列の平均
+
+            # 使用したデータ数をI列とM列に記録
+            data_count_f = len(filtered_data_f)
+            # data_count_k = len(filtered_data_k)
+
+            if data_count_f == 100 and flag == 0:
+                sheet0.range('H10').value = row - 1  # 100個のデータがそろう時間[ms]を記録
+                flag = 1
+
+            sheet0.range(f'I{row}').value = data_count_f  # F列のデータ数
+            # sheet0.range(f'M{row}').value = data_count_k  # K列のデータ数
+
+            # total_used_data_count += data_count_f + data_count_k
+
+            # 次の行へ
+            row += 1
         # '0'以外のすべてのシートを処理対象として取得
-        sheets_to_process = [workbook.sheets[sheet_name] for sheet_name in workbook.sheets if sheet_name.name != '0']
-        if not sheets_to_process:
-            print("処理するシートが見つかりません。ワークブックを確認してください。")
-            app.quit()
-            return
-        print(f"処理対象のシート数: {len(sheets_to_process)}")
+        # sheets_to_process = [workbook.sheets[sheet_name] for sheet_name in workbook.sheets if sheet_name.name != '0']
+        # if not sheets_to_process:
+        #     print("処理するシートが見つかりません。ワークブックを確認してください。")
+        #     app.quit()
+        #     return
+        # print(f"処理対象のシート数: {len(sheets_to_process)}")
         
         # # 未使用シートを記録するリスト
         # unused_sheets = {sheet.title: True for sheet in sheets_to_process}  # 初期値として全シートを未使用とみなす
@@ -219,58 +294,74 @@ def calculate_std_dev(new_file_path, write_path,column_letter='F'):
         #     sheet0[f'G{i}'] = sheets_to_process[0][f'G{i}'].value  # 最初のシートからコピー
         #     sheet0[f'H{i}'] = sheets_to_process[0][f'H{i}'].value
 
-
         # 各行の処理を行い、シート '0' の指定列に標準偏差と平均を計算して書き込み
-        row = 2
-        #total_data_count = 0  # データの総数をカウント
-        flag=0
-        while True:
-            # 処理対象シートの指定列からデータを収集
-            data = []
+        # row = 2
+        # #total_data_count = 0  # データの総数をカウント
+        # flag=0
+        # for data in std_dev_data:
+        #         sheet_name = data["sheet_name"]
+        #         distance_data = data["distance_data"]
+        #         k_data = data["k_data"]
 
-            # for sheet in sheets_to_process:
-            #     # シート全体のデータを一括取得
-            #     column_data = sheet.range(f'{column_letter}2:{column_letter}{sheet.cells.last_cell.row}').value
-            #     shift_data = sheet.range(f'K2:K{sheet.cells.last_cell.row}').value
+        # while True:
+        #     # 処理対象シートの指定列からデータを収集
+        #     data = []
 
-            #     # 必要なデータをフィルタリング
-            #     for shift_value, cell_value in zip(shift_data, column_data):
-            #         if shift_value != 1 and cell_value is not None:
-            #             data.append(cell_value)
+        #     # for sheet in sheets_to_process:
+        #     #     # シート全体のデータを一括取得
+        #     #     column_data = sheet.range(f'{column_letter}2:{column_letter}{sheet.cells.last_cell.row}').value
+        #     #     shift_data = sheet.range(f'K2:K{sheet.cells.last_cell.row}').value
+
+        #     #     # 必要なデータをフィルタリング
+        #     #     for shift_value, cell_value in zip(shift_data, column_data):
+        #     #         if shift_value != 1 and cell_value is not None:
+        #     #             data.append(cell_value)
+            
+        #     #rowデータを格納
+        #     for i in range(2, len(distance_data) + 2):#1はインデックスなのでパス
+        #         cell_value = distance_data[i-2]  # 1行目はインデックスなので、2行目から始まる
+        #         data.append(cell_value)
+            
+        #     # 標準偏差と平均を計算（None を除外して計算）
+        #     filtered_data = [value for value in distance_data if value is not None]
+        #     std_dev = statistics.stdev(filtered_data) if len(filtered_data) > 1 else 0
+        #     mean_value = statistics.mean(filtered_data) if filtered_data else 0
+
+        #     print(f"Sheet {sheet_name}: 標準偏差 = {std_dev}, 平均 = {mean_value}")
+
+        #     # for sheet in sheets_to_process:
+        #     #     shift_value=sheet.range(f'K{row}').value
+        #     #     cell_value = sheet.range(f'{column_letter}{row}').value
+        #     #     if shift_value != 1 and cell_value is not None:  # shift_valueが1でない場合はデータを収集
+        #     #         data.append(cell_value)
+        #     #         #unused_sheets[sheet.title] = False  # データが使用されたシートを「未使用ではない」と記録
     
-            for sheet in sheets_to_process:
-                shift_value=sheet.range(f'K{row}').value
-                cell_value = sheet.range(f'{column_letter}{row}').value
-                if shift_value != 1 and cell_value is not None:  # shift_valueが1でない場合はデータを収集
-                    data.append(cell_value)
-                    #unused_sheets[sheet.title] = False  # データが使用されたシートを「未使用ではない」と記録
-    
-            # データがない場合、終了
-            if not data:
-                sheet0.range('A2').value = len(sheets_to_process)  # 処理したシート数を記録
-                break
+        #     # # データがない場合、終了
+        #     if not data:
+        #         #sheet0.range('A2').value = len(sheets_to_process)  # 処理したシート数を記録
+        #         break
             
-            # 標準偏差と平均を計算
-            std_dev = statistics.stdev(data) if len(data) > 1 else 0
-            mean_value = statistics.mean(data) if data else 0
-            print(f"Row {row}: 標準偏差 = {std_dev}, 平均 = {mean_value}")# デバッグ用
+        #     # # 標準偏差と平均を計算
+        #     # std_dev = statistics.stdev(data) if len(data) > 1 else 0
+        #     # mean_value = statistics.mean(data) if data else 0
+        #     # print(f"Row {row}: 標準偏差 = {std_dev}, 平均 = {mean_value}")# デバッグ用
             
-            # シート '0' の指定セルに標準偏差を書き込む
-            sheet0.range(f'{column_letter}{row}').value = std_dev
+        #     # シート '0' の指定セルに標準偏差を書き込む
+        #     sheet0.range(f'{column_letter}{row}').value = std_dev
             
-            # 平均をJ列に記録
-            sheet0.range(f'J{row}').value = mean_value
+        #     # 平均をJ列に記録
+        #     sheet0.range(f'J{row}').value = mean_value
             
-            # 使用したデータ数をI列に記録
-            data_count = len(data)
-            if data_count == 100 and flag==0:
-                sheet0.range('H10').value=row-1  # 100個のデータがそろう時間[ms]を記録
-                flag=1
-            sheet0.range(f'I{row}').value = data_count
-            total_used_data_count += data_count
+        #     # 使用したデータ数をI列に記録
+        #     data_count = len(data)# 標準偏差を求めるのに使用したデータを保存
+        #     if data_count == 100 and flag==0:
+        #         sheet0.range('H10').value=row-1  # 100個のデータがそろう時間[ms]を記録
+        #         flag=1
+        #     sheet0.range(f'I{row}').value = data_count
+        #     total_used_data_count += data_count
             
-            # 次の行へ
-            row += 1
+        #     # 次の行へ
+        #     row += 1
         
         base_name = os.path.basename(write_path)  # ファイル名のみを抽出 データを読み込むのに使ったファイル名を使う
         updated_time = datetime.now().strftime("%Y%m%d_%H%M%S")  # 新しい時間
@@ -279,7 +370,8 @@ def calculate_std_dev(new_file_path, write_path,column_letter='F'):
         
         writebook.save(new_write_path)  # write_pathに保存
         writebook.close()  # 書き込み用のワークブックを閉じる
-        workbook.close()  # 読み込み用のワークブックを閉じる
+        #workbook.close()  # 読み込み用のワークブックを閉じる
+
     finally:
         app.quit()  # Excelアプリケーションを終了
 
@@ -297,7 +389,7 @@ print("記録を残すファイルを選んでください")
 write_path = filedialog.askopenfilename(title="標準偏差を書き込むエクセルファイルを選択", filetypes=[("Excel files", "*.xlsx")])
 
 start_time = time.time()#開始時間
-new_file_path, new_write_path=process_all_sheets(file_path,write_path)#関数の呼び出し
+std_dev_data,new_file_path, new_write_path=process_all_sheets(file_path,write_path)#関数の呼び出し
 end_time = time.time()#終了時間
 print(f'Process all sheets is done. Elapsed time: {end_time - start_time:.2f} seconds.')
 
@@ -309,6 +401,6 @@ print(f'Process all sheets is done. Elapsed time: {end_time - start_time:.2f} se
 #print("記録を残すファイルを選んでください")
 #write_path = filedialog.askopenfilename(title="Select Excel file", filetypes=[("Excel files", "*.xlsx")])
 print ("標準偏差を求めます")
-calculate_std_dev(new_file_path, new_write_path,column_letter='F')#標準偏差を求める関数
+calculate_std_dev(std_dev_data, new_write_path,column_letter='F')#標準偏差を求める関数
 print(new_file_path)
 print(write_path)
