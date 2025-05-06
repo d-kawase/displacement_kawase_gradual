@@ -13,7 +13,6 @@ from datetime import datetime
 import xlwings as xw
 
 
-
 def collect_zone_change_indices(sheet):
     """ゾーン変化箇所の行番号を取得する関数"""
     column_data = {col: [] for col in ["A", "B", "C", "D", "E", "F", "I", "J"]}
@@ -46,7 +45,6 @@ def save_data(sheet, column_data, shift_diff, target_change_index, sampling_inte
 
     # 新しい column_data を作成
     updated_column_data = {col: [None] * max_row for col in column_data.keys()}
-    #updated_column_data = {col: [None] * shift_diff for col in column_data.keys()}
 
     # データシフト（元のデータは消去せずに移動）
     for row in range(max_row - 1, 1, -1):  # 逆順でシフト
@@ -94,7 +92,7 @@ def process_all_sheets(file_path, write_path):
         if sheet_index > num:
             break
         sheet = wb[sheet_name]
-        print(f'Analyzing {sheet_name}...')
+        #print(f'Analyzing {sheet_name}...')#デバック用
         try:
             column_data, change_indices, non_empty_rows = collect_zone_change_indices(sheet)#関数の呼び出し
             #print(f"{sheet_name} のデータを収集しました。データ数は{non_empty_rows}行です。")#デバック用
@@ -111,7 +109,7 @@ def process_all_sheets(file_path, write_path):
 
     # ゾーン変化箇所のランキングを表示
     sorted_change_indices = sorted(all_change_indices.items(), key=lambda x: x[1])
-    print(f"ゾーン変化箇所のランキング: {sorted_change_indices}")
+    #print(f"ゾーン変化箇所のランキング: {sorted_change_indices}")#デバック用
 
     if len(sorted_change_indices) >= 100:
         target_change_index = sorted_change_indices[99][1]#
@@ -123,26 +121,40 @@ def process_all_sheets(file_path, write_path):
         print(f"100個未満のため、最大のゾーン変化箇所の行番号: {target_change_index}")
 
     # 101番目以降のシートを削除
-    if len(sorted_change_indices) > 100 or sheet_name !="0":#0のシートは削除しない
+    print(f"{len(sorted_change_indices)}個のシートが見つかりました。")
+    if len(sorted_change_indices) > 100:#条件を変更
         for sheet_name, _ in sorted_change_indices[100:]:
+            #print(f"シート {sheet_name} を削除します。")#デバック用
             wb.remove(wb[sheet_name])
-            print(f"シート {sheet_name} を削除しました。")
+            #print(f"シート {sheet_name} を削除しました。")
+            #sheet_namesも更新
+            sheet_names.remove(sheet_name)
+            print(f"sheet_names:{sheet_names}")#デバック用
 
     # シフトと書き込みフェーズ
+    k=0
     for sheet_name, (sheet, column_data, max_change_index) in sheet_data.items():
+        if sheet_name not in sheet_names:
+            continue  # シートが削除された場合はスキップ
         shift_diff = target_change_index - max_change_index
         if shift_diff > 0:
-            print(f"{sheet_name} のデータを {shift_diff} 行下にシフトします。")
+            #print(f"{sheet_name} のデータを {shift_diff} 行下にシフトします。")#デバック用
             save_data(sheet, column_data, shift_diff, target_change_index, sampling_interval, measurement_count)#関数の呼び出し
        # 標準偏差用のデータを収集
         distance_data = column_data["F"]  # 距離情報が入っている列（F列）
+        c_data = column_data["C"]  # C列のデータ
+        d_data = column_data["D"]  # D列のデータ
         # k_data = column_data["K"]  # K列のデータ
         std_dev_data.append({
             "sheet_name": sheet_name,
             "distance_data": distance_data[1:],  # 2行目以降を格納
+            "c_data": c_data[1:],  # 2行目以降を格納
+            "d_data": d_data[1:] # 2行目以降を格納
             # "k_data": k_data[1:]  # 2行目以降を格納
         })
-        print(f"{sheet_name} のdistance_data: {distance_data[1:]} を収集しました。")#デバック用
+        k+=1
+        #print(f"{sheet_name} のdistance_data: {distance_data[1:]} を収集しました。")#デバック用
+    print(f"標準偏差用のデータを{k}回収集しました。")#デバック用
 
 
 
@@ -170,13 +182,7 @@ def process_all_sheets(file_path, write_path):
         wb = app.books.open(write_path)
         
 
-
-#ここから下のsheet_0の書き込みはいる？
         sheet_0 = wb.sheets("0")
-        # sheet_0.range("G8").value = "ゾーンが変化した時間[ms]"
-        # sheet_0.range("G9").value = "100個のデータがそろう行番号"
-        # sheet_0.range("H8").value= target_sheet_name
-        # sheet_0.range("H9").value = target_change_index
 
         """計測条件を記録"""
         sheet_0.range("H2").value =measurement_count#標準偏差算出の条件に使う
@@ -218,7 +224,7 @@ def process_all_sheets(file_path, write_path):
         writer.writerow(["ランキング", "シート名", "ゾーン変化箇所"])
         for rank, (sheet_name, change_index) in enumerate(sorted_change_indices, start=1):
             writer.writerow([rank, sheet_name, change_index])
-    print(f'ランキングを {ranking_file_path} に保存しました。')
+    #print(f'ランキングを {ranking_file_path} に保存しました。')
     print(new_file_path)
     print(write_path)
 
@@ -237,6 +243,8 @@ def calculate_std_dev(std_dev_data, write_path,measurement_count,column_letter='
         #workbook = app.books.open(new_file_path)
         writebook=app.books.open(write_path)
         sheet0 = writebook.sheets['0']
+        #シートの枚数を取得
+        sheet_names = writebook.sheets
         
 
         row = 2  # 処理を開始する行
@@ -246,11 +254,15 @@ def calculate_std_dev(std_dev_data, write_path,measurement_count,column_letter='
         while True:
             # 処理対象シートの指定列からデータを収集
             data_f = []  # F列のデータ
+            data_c = []  # C列のデータ
+            data_d = []
             flag = 0  # None のカウント
 
             for data in std_dev_data:
                 sheet_name = data["sheet_name"]
                 distance_data = data["distance_data"]
+                c_data = data["c_data"]
+                d_data = data["d_data"]
 
                 # F列のデータを収集
                 #print(f"{"sheet_name"}:{len(distance_data)}")#デバック用
@@ -260,15 +272,25 @@ def calculate_std_dev(std_dev_data, write_path,measurement_count,column_letter='
                         data_f.append(cell_value_f)
                     else:
                         flag += 1  # None の場合フラグを増加
+
+                if row - 2 < len(c_data):  # インデックスが範囲内の場合
+                    cell_value_c = c_data[row - 2]
+                    if cell_value_c is not None:
+                        data_c.append(cell_value_c)
+
+                if row - 2 < len(d_data):  # インデックスが範囲内の場合
+                    cell_value_d = d_data[row - 2]
+                    if cell_value_d is not None:
+                        data_d.append(cell_value_d)               
                 #print(f"Row {row}: {sheet_name} の F列のデータ = {cell_value_f} {flag}")
 
             if row==2:#初期のlen(std_dev_data)を取得
-                len_std_dev_data=len(data["sheet_name"])
-                print(f"len_std_dev_data:{len_std_dev_data}")#デバック用
+                len_std_dev_data=len(sheet_names)
+                #print(f"len_std_dev_data:{len_std_dev_data}")#デバック用
 
             # None の割合が 10% を超えた場合、次の行へ進む
             if flag > len_std_dev_data * 0.1:
-                print(f"Row {row}: None の割合が 10% を超えたため、データ収集をスキップします。")
+                #print(f"Row {row}: None の割合が 10% を超えたため、データ収集をスキップします。")#デバック用
                 row += 1
                 continue
 
@@ -279,7 +301,7 @@ def calculate_std_dev(std_dev_data, write_path,measurement_count,column_letter='
 
             # 標準偏差を求めるためのデータ数が 80% 未満の場合、次の行へ進む
             if len(data_f) <= len_std_dev_data*0.8:
-                print(f"Row {row}: データが不足しているため、データ収集をスキップします。")
+                #print(f"Row {row}: データが不足しているため、データ収集をスキップします。")#デバック用
                 row += 1
                 continue
 
@@ -288,8 +310,11 @@ def calculate_std_dev(std_dev_data, write_path,measurement_count,column_letter='
             filtered_data_f = [value for value in data_f if value is not None]
             std_dev_f = statistics.stdev(filtered_data_f) if len(filtered_data_f) > 1 else 0
             mean_value_f = statistics.mean(filtered_data_f) if filtered_data_f else 0
+            # C列とD列の平均を計算
+            mean_value_c = statistics.mean(data_c) if data_c else 0
+            mean_value_d = statistics.mean(data_d) if data_d else 0
 
-            print(f"Row {row}: F列 標準偏差 = {std_dev_f}, 平均 = {mean_value_f}")
+            #print(f"Row {row}: F列 標準偏差 = {std_dev_f}, 平均 = {mean_value_f}")#デバック用
             if start_flag == 0:  # 初回のみ書き込み
                 sheet0.range("H14").value = row  # 書き込み開始行を記録
                 start_flag = 1  # 書き込み開始フラグを立てる
@@ -297,6 +322,9 @@ def calculate_std_dev(std_dev_data, write_path,measurement_count,column_letter='
             # シート '0' の指定セルに標準偏差を書き込む
             sheet0.range(f'{column_letter}{row}').value = std_dev_f  # F列の標準偏差
             sheet0.range(f'J{row}').value = mean_value_f  # F列の平均
+            # C列とD列に平均値を書き込む
+            sheet0.range(f'C{row}').value = mean_value_c
+            sheet0.range(f'D{row}').value = mean_value_d
 
             # 使用したデータ数をI列に記録
             data_count_f = len(filtered_data_f)
@@ -309,13 +337,6 @@ def calculate_std_dev(std_dev_data, write_path,measurement_count,column_letter='
 
         total_used_data_count = 0  # 使用されたデータ数を記録する変数
         # 任意のシートからG2-G5およびH2-H5のデータをシート '0' にコピー
-
-        """ 以下の3行は一旦コメントアウト 測定条件を書き込み用のシートに書き込む"""
-        # for i in range(2, 6):
-        #     sheet0[f'G{i}'] = sheets_to_process[0][f'G{i}'].value  # 最初のシートからコピー
-        #     sheet0[f'H{i}'] = sheets_to_process[0][f'H{i}'].value
-
-
         
         base_name = os.path.basename(write_path)  # ファイル名のみを抽出 データを読み込むのに使ったファイル名を使う
         updated_time = datetime.now().strftime("%Y%m%d_%H%M%S")  # 新しい時間
