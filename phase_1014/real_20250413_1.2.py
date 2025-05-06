@@ -129,7 +129,7 @@ def process_all_sheets(file_path, write_path):
             #print(f"シート {sheet_name} を削除しました。")
             #sheet_namesも更新
             sheet_names.remove(sheet_name)
-            print(f"sheet_names:{sheet_names}")#デバック用
+            #print(f"sheet_names:{sheet_names}")#デバック用
 
     # シフトと書き込みフェーズ
     k=0
@@ -154,7 +154,7 @@ def process_all_sheets(file_path, write_path):
         })
         k+=1
         #print(f"{sheet_name} のdistance_data: {distance_data[1:]} を収集しました。")#デバック用
-    print(f"標準偏差用のデータを{k}回収集しました。")#デバック用
+    #print(f"標準偏差用のデータを{k}回収集しました。")#デバック用
 
 
 
@@ -258,7 +258,9 @@ def calculate_std_dev(std_dev_data, write_path,measurement_count,column_letter='
             data_d = []
             flag = 0  # None のカウント
 
+            print("計算をしています...")
             for data in std_dev_data:
+                
                 sheet_name = data["sheet_name"]
                 distance_data = data["distance_data"]
                 c_data = data["c_data"]
@@ -337,7 +339,7 @@ def calculate_std_dev(std_dev_data, write_path,measurement_count,column_letter='
 
         total_used_data_count = 0  # 使用されたデータ数を記録する変数
         # 任意のシートからG2-G5およびH2-H5のデータをシート '0' にコピー
-        
+        print("計算を終えました。保存中です...")
         base_name = os.path.basename(write_path)  # ファイル名のみを抽出 データを読み込むのに使ったファイル名を使う
         updated_time = datetime.now().strftime("%Y%m%d_%H%M%S")  # 新しい時間
         new_name = re.sub(r'(\d{8}_\d{6})', updated_time, base_name)  # 古い時間部分を新しい時間に置き換え
